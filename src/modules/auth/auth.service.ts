@@ -2,13 +2,13 @@
 import { ErrorCode } from "../../common/enums/error-code.enum";
 import { VerificationEnum } from "../../common/enums/verification-code.enum";
 import { LoginDataObject, RegisterDataObject } from "../../common/interface/auth.interface";
-import { BadRequestException } from "../../common/utls/catch-errors";
-import { fortyFiveMinutesFromNow } from "../../common/utls/date-time";
+import { BadRequestException, UnauthorizedException } from "../../common/utls/catch-errors";
+import { calculateExpirationDate, fortyFiveMinutesFromNow, ONE_DAY_IN_MS } from "../../common/utls/date-time";
+import { RefreshTokenPayload, refreshTokenSignOptions, signJwtToken, verifyJwtToken } from "../../common/utls/jwt";
+import { config } from "../../config/app.config";
 import SessionModel from "../../database/models/session.model";
 import UserModel from "../../database/models/user.model";
 import VerificationCodeModel from "../../database/models/verification.model";
-import { AccessTokenPayload, signJwtToken } from "../../common/utls/jwt";
-import { config } from "../../config/app.config";
 
 
 export class AuthService {
@@ -52,11 +52,47 @@ export class AuthService {
             throw new BadRequestException("Invalid email or password.", ErrorCode.AUTH_USER_NOT_FOUND);
         }
 
-        // Check if the user enable 2fa return user as null
+        // TODO Check if the user enable 2fa return user as null
+
+
         const session = await SessionModel.create({ userId: user.id, userAgent });
 
         const accessToken = signJwtToken({ userId: user.id, sessionId: session.id });
+        const refreshToken = signJwtToken({ sessionId: session.id }, refreshTokenSignOptions);
 
-        return { user, accessToken };
+        return { user, accessToken, refreshToken };
+    }
+
+    public async refreshToken(refreshToken: string) {
+        const { payload } = verifyJwtToken<RefreshTokenPayload>(refreshToken, { secret: refreshTokenSignOptions.secret });
+
+        if (!payload) {
+            throw new UnauthorizedException("Invalid refresh token");
+        }
+
+        const session = await SessionModel.findById(payload.sessionId);
+
+        if (!session) {
+            throw new UnauthorizedException("Session does not exist.");
+        }
+
+        const now = Date.now();
+
+        if (session.expiredAt.getTime() <= now) {
+            throw new UnauthorizedException("Session expired.");
+        }
+
+        const sessionRequireRefresh = session.expiredAt.getTime() - now <= ONE_DAY_IN_MS;
+
+        if (sessionRequireRefresh) {
+            session.expiredAt = calculateExpirationDate(config.JWT.REFRESH_EXPIRES_IN);
+            await session.save();
+        }
+
+        const newRefreshToken = sessionRequireRefresh ? signJwtToken({ sessionId: session.id }, refreshTokenSignOptions) : undefined;
+
+        const accessToken = signJwtToken({ userId: session.userId, sessionId: session.id });
+
+        return { accessToken, newRefreshToken };
     }
 }
