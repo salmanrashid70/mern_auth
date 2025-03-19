@@ -2,7 +2,7 @@ import { Request, Response } from "express";
 import { asyncHandler } from "../../middlewares/asyncHandler";
 import { AuthService } from "./auth.service";
 import { HTTPSTATUS } from "../../config/http.config";
-import { loginSchema, registerSchema } from "../../common/validators/auth.validator";
+import { emailSchema, loginSchema, registerSchema, verificationEmailSchema } from "../../common/validators/auth.validator";
 import { getAccessTokenCookieOptions, getRefreshTokenCookieOptions, setAuthenticationCookieOptions } from "../../common/utls/cookies";
 import { UnauthorizedException } from "../../common/utls/catch-errors";
 
@@ -54,6 +54,28 @@ export class AuthController {
             return res.status(HTTPSTATUS.OK)
                 .cookie("accessToken", accessToken, getAccessTokenCookieOptions())
                 .json({ message: "Refresh access token successfully." });
+        }
+    );
+
+    public verifyEmail = asyncHandler(
+        async (req: Request, res: Response): Promise<any> => {
+            const { code } = verificationEmailSchema.parse(req.body);
+
+            const { user } = await this.authService.verifyEmail(code);
+
+            console.log(user);
+
+            return res.status(HTTPSTATUS.OK).json({ message: "Email verified successfully." })
+        }
+    );
+
+    public forgotPassword = asyncHandler(
+        async (req: Request, res: Response): Promise<any> => {
+            const email = emailSchema.parse(req.body.email);
+
+            await this.authService.forgotPassword(email);
+
+            return res.status(HTTPSTATUS.OK).json({ message: "Password reset email has been sent." });
         }
     );
 }

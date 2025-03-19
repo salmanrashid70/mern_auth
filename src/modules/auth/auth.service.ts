@@ -1,4 +1,3 @@
-// Write business logic here
 import { ErrorCode } from "../../common/enums/error-code.enum";
 import { VerificationEnum } from "../../common/enums/verification-code.enum";
 import { LoginDataObject, RegisterDataObject } from "../../common/interface/auth.interface";
@@ -9,6 +8,8 @@ import { config } from "../../config/app.config";
 import SessionModel from "../../database/models/session.model";
 import UserModel from "../../database/models/user.model";
 import VerificationCodeModel from "../../database/models/verification.model";
+import { sendEmail } from "../../mailers/mailer";
+import { verifyEmailTemplate } from "../../mailers/templates/template";
 
 
 export class AuthService {
@@ -33,6 +34,12 @@ export class AuthService {
 
 
         // TODO: Send verification email link
+        const verificationUrl = `${config.APP_ORIGIN}/confirm-account?code=${verification.code}`;
+
+        await sendEmail({
+            to: newUser.email,
+            ...verifyEmailTemplate(verificationUrl),
+        });
 
         return { user: newUser };
     }
@@ -94,5 +101,27 @@ export class AuthService {
         const accessToken = signJwtToken({ userId: session.userId, sessionId: session.id });
 
         return { accessToken, newRefreshToken };
+    }
+
+    public async verifyEmail(code: string) {
+        const validCode = await VerificationCodeModel.findOne({ code: code, type: VerificationEnum.EMAIL_VERIFICATION, expiresAt: { $gt: new Date() } });
+
+        if (!validCode) {
+            throw new BadRequestException("Invalid or expired verification code.");
+        }
+
+        const updatedUser = await UserModel.findByIdAndUpdate(validCode.userId, { isEmailVerified: true }, { new: true });
+
+        if (!updatedUser) {
+            throw new BadRequestException("Unable to verify email address.", ErrorCode.VALIDATION_ERROR);
+        }
+
+        await validCode.deleteOne();
+
+        return { user: updatedUser };
+    }
+
+    public async forgotPassword(email: string) {
+
     }
 }
