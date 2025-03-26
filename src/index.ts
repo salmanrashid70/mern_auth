@@ -8,6 +8,8 @@ import { errorHandler } from "./middlewares/errorHandler";
 import { HTTPSTATUS } from "./config/http.config";
 import { asyncHandler } from "./middlewares/asyncHandler";
 import authRoutes from "./modules/auth/auth.routes";
+import passport from "passport";
+import { setupJwtStrategry } from "./common/strategies/jwt.strategy";
 
 const app = express();
 const BASE_PATH = config.BASE_PATH;
@@ -27,6 +29,9 @@ app.use(cookieParser());
 app.get('/', asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
     res.status(HTTPSTATUS.OK).json({ messsage: "Backend is ready to serve the service." });
 }));
+
+app.use(passport.initialize());
+setupJwtStrategry(passport);
 
 app.use(`${BASE_PATH}/auth`, authRoutes);
 
