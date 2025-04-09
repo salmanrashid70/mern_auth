@@ -9,7 +9,9 @@ import { HTTPSTATUS } from "./config/http.config";
 import { asyncHandler } from "./middlewares/asyncHandler";
 import authRoutes from "./modules/auth/auth.routes";
 import passport from "passport";
-import { setupJwtStrategry } from "./common/strategies/jwt.strategy";
+import { authenticateJWT, setupJwtStrategry } from "./common/strategies/jwt.strategy";
+import sessionRoutes from "./modules/session/session.route";
+import mfaRoutes from "./modules/mfa/mfa.routes";
 
 const app = express();
 const BASE_PATH = config.BASE_PATH;
@@ -27,13 +29,17 @@ app.use(
 app.use(cookieParser());
 
 app.get('/', asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
-    res.status(HTTPSTATUS.OK).json({ messsage: "Backend is ready to serve the service." });
+    res.status(HTTPSTATUS.OK).json({ messsage: "Backend is ready to serve you." });
 }));
 
 app.use(passport.initialize());
 setupJwtStrategry(passport);
 
 app.use(`${BASE_PATH}/auth`, authRoutes);
+
+app.use(`${BASE_PATH}/mfa`, mfaRoutes);
+
+app.use(`${BASE_PATH}/session`, authenticateJWT, sessionRoutes);
 
 app.use(errorHandler);
 

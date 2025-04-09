@@ -18,18 +18,20 @@ const sessionSchema = new Schema<SessionDocument>(
     },
     {
         timestamps: true,
-        toJSON: {}
+        toJSON: {
+            transform: function (doc, ret) {
+                console.log("Transforming session:", ret);
+                if (ret._id instanceof mongoose.Types.ObjectId) {
+                    ret.id = ret._id.toHexString();
+                } else {
+                    ret.id = ret._id;
+                }
+                delete ret._id;
+                return ret;
+            }
+        }
     }
 );
-
-sessionSchema.set("toJSON", {
-    transform: function (doc, ret) {
-        ret.id = ret._id;
-        delete ret._id;
-
-        return ret;
-    }
-})
 
 const SessionModel = mongoose.model<SessionDocument>("Session", sessionSchema);
 
