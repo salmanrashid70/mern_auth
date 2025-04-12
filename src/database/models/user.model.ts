@@ -4,7 +4,7 @@ import { compareValue, hashValue } from "../../common/utls/bcrypt";
 interface UserPreferences {
     enable2FA: boolean;
     emailNotification: boolean;
-    twoFactorSecret: string;
+    twoFactorSecret?: string;
 }
 
 export interface UserDocument extends Document {

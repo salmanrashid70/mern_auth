@@ -1,8 +1,11 @@
 import { Request } from "express";
 import speakeasy from "speakeasy";
 import qrcode from "qrcode";
-import { BadRequestException, UnauthorizedException } from "../../common/utls/catch-errors";
+import { BadRequestException, NotFoundException, UnauthorizedException } from "../../common/utls/catch-errors";
 import { APP_NAME } from "../../common/utls/constants";
+import UserModel from "../../database/models/user.model";
+import SessionModel from "../../database/models/session.model";
+import { refreshTokenSignOptions, signJwtToken } from "../../common/utls/jwt";
 
 export class MfaService {
     public async generateMFASetup(req: Request) {
@@ -67,5 +70,63 @@ export class MfaService {
                 enable2FA: user.userPreferences.enable2FA
             }
         };
+    }
+
+    public async revokeMFA(req: Request) {
+        const user = req.user;
+
+        if (!user) {
+            throw new UnauthorizedException("User not authorized.");
+        }
+
+        if (!user.userPreferences.enable2FA) {
+            return {
+                message: "MFA is not enabled.",
+                userPreference: {
+                    enable2FA: user.userPreferences.enable2FA
+                },
+            };
+        }
+
+        user.userPreferences.twoFactorSecret = undefined;
+        user.userPreferences.enable2FA = false;
+        await user.save();
+
+        return {
+            message: "MFA revoke successfully.",
+            userPreferences: {
+                enable2FA: user.userPreferences.enable2FA,
+            },
+        };
+    }
+
+    public async verifyMFAForLogin(code: string, email: string, userAgent?: string) {
+        const user = await UserModel.findOne({ email });
+
+        if (!user) {
+            throw new NotFoundException("User not found.");
+        }
+
+        if (!user.userPreferences.enable2FA && !user.userPreferences.twoFactorSecret) {
+            throw new UnauthorizedException("MFA not enabled for this user.");
+        }
+
+        const isValid = speakeasy.totp.verify({
+            secret: user.userPreferences.twoFactorSecret!,
+            encoding: "base32",
+            token: code,
+        });
+
+        if (!isValid) {
+            throw new BadRequestException("Invalid MFA code. Please try again.");
+        }
+
+        const session = await SessionModel.create({ userId: user.id, userAgent });
+
+        const accessToken = signJwtToken({ userId: user.id, sessionId: session.id });
+
+        const refreshToken = signJwtToken({ sessionId: session.id }, refreshTokenSignOptions);
+
+        return { user, accessToken, refreshToken }
     }
 }

@@ -6,5 +6,8 @@ const mfaRoutes = Router();
 
 mfaRoutes.get('/', authenticateJWT, mfaController.generateMFASetup);
 mfaRoutes.post("/verify", authenticateJWT, mfaController.verifyMFASetup);
+mfaRoutes.put("/revoke", authenticateJWT, mfaController.revokeMFA);
+
+mfaRoutes.post("/verify-login", mfaController.verifyMFAForLogin);
 
 export default mfaRoutes;

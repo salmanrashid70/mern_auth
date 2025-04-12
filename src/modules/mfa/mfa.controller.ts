@@ -2,7 +2,8 @@ import { Request, Response } from "express";
 import { asyncHandler } from "../../middlewares/asyncHandler";
 import { MfaService } from "./mfa.service";
 import { HTTPSTATUS } from "../../config/http.config";
-import { verifyMfaSchema } from "../../common/validators/mfa.validator";
+import { verifyMfaForLoginSchema, verifyMfaSchema } from "../../common/validators/mfa.validator";
+import { setAuthenticationCookieOptions } from "../../common/utls/cookies";
 
 export class MfaController {
     private mfaService: MfaService;
@@ -27,6 +28,28 @@ export class MfaController {
 
             return res.status(HTTPSTATUS.OK).json({ message, userPreferences });
         }
+    );
 
+    public revokeMFA = asyncHandler(
+        async (req: Request, res: Response) => {
+            const { message, userPreferences } = await this.mfaService.revokeMFA(req);
+
+            return res.status(HTTPSTATUS.OK).json({ message, userPreferences });
+        }
+    );
+
+    public verifyMFAForLogin = asyncHandler(
+        async (req: Request, res: Response) => {
+            const { code, email, userAgent } = verifyMfaForLoginSchema.parse({
+                ...req.body,
+                userAgent: req.headers["user-agent"],
+            });
+
+            const { accessToken, refreshToken, user } = await this.mfaService.verifyMFAForLogin(code, email, userAgent);
+
+            return setAuthenticationCookieOptions({ res, accessToken, refreshToken })
+                .status(HTTPSTATUS.OK)
+                .json({ message: "Verified & login successfully.", user });
+        }
     );
 }
